@@ -53,33 +53,41 @@ if st.button("🚀 Deploy Full Council"):
 
         status.update(label="✅ Agents Finished!", state="complete")
 
-# --- THE FINAL ASSEMBLY (REPAIRED) ---
-st.markdown("---")
-if 'intel_res' in st.session_state:
-    if st.button("🖋️ Generate Master Dossier"):
-        with st.spinner("Synthesizing Final Report..."):
-            genai.configure(api_key=gemini_key)
-            
-            # Using the EXACT strings from your successful ListModels call
-            # Removing the 'models/' prefix as the GenerativeModel class adds it automatically
-            fallbacks = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-pro']
-            
-            success = False
-            ctx = f"Intel: {st.session_state['intel_res']}\nTech: {st.session_state['tech_res']}\nRes: {st.session_state['res_res']}"
-            
-            for m_name in fallbacks:
-                try:
-                    model = genai.GenerativeModel(m_name)
-                    final = model.generate_content(f"Create a professional report: {ctx}")
-                    st.session_state['final_report'] = final.text
-                    success = True
-                    break 
-                except Exception as e:
-                    st.warning(f"Model {m_name} failed. Checking next...")
-                    time.sleep(2) # Cooldown to avoid RPM limits
-            
-            if success:
+# --- THE FINAL ASSEMBLY (UNIVERSAL LOADER) ---
+if st.button("🖋️ Generate Master Dossier"):
+    if not st.secrets.get("GEMINI_API_KEY"):
+        st.error("API Key missing!")
+    else:
+        with st.spinner("Council is assembling the final report..."):
+            try:
+                # Force the library to use the stable configuration
+                genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+                
+                # TEST 1: Try the most stable name first
+                # We skip 'models/' prefix because the library adds it
+                model = genai.GenerativeModel('gemini-1.5-flash')
+                
+                # Prepare the data
+                ctx = f"INTEL: {st.session_state.get('intel_res')}\nTECH: {st.session_state.get('tech_res')}\nRES: {st.session_state.get('res_res')}"
+                
+                # Execute with a direct prompt
+                response = model.generate_content(
+                    f"Combine these reports into one professional engineering dossier: {ctx}",
+                    request_options={"timeout": 600}
+                )
+                
+                st.session_state['final_report'] = response.text
+                st.success("✅ Success!")
                 st.markdown(st.session_state['final_report'])
-                st.download_button("Download Report", st.session_state['final_report'], file_name="Report.md")
-            else:
-                st.error("All Gemini models are currently rate-limited. Please wait 1-2 minutes.")
+                
+            except Exception as e:
+                # IF TEST 1 FAILS: Try the "Latest" tag which bypasses versioning
+                try:
+                    st.info("Retrying with legacy-stable path...")
+                    model = genai.GenerativeModel('gemini-pro')
+                    response = model.generate_content(f"Summarize this: {ctx}")
+                    st.session_state['final_report'] = response.text
+                    st.rerun()
+                except Exception as e2:
+                    st.error(f"Critical Failure: {e2}")
+                    st.info("Check: Is your API key from 'Google AI Studio' and not 'Google Cloud Vertex AI'?")
