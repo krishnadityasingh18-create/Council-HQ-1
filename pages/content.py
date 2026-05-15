@@ -64,8 +64,8 @@ def build_parsed_pdf(markdown_text):
             pdf.set_font("Helvetica", size=11)
             pdf.multi_cell(safe_width, 7, txt=text_content)
             
-    # FIXED: pdf.output(dest='S') already returns bytes/bytearray. No .encode() needed!
-    return pdf.output(dest='S')
+    # CRITICAL FIX: Convert bytearray to immutable bytes so Streamlit accepts it
+    return bytes(pdf.output(dest='S'))
 
 # --- ADVANCED PPTX RENDERING ENGINE (AUTO-SLIDE GENERATOR) ---
 def build_parsed_pptx(markdown_text):
