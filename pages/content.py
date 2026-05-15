@@ -2,17 +2,20 @@ import streamlit as st
 import google.generativeai as genai
 
 st.title("🎨 Content & Reporting")
+st.markdown("---")
 
-gemini_key = st.sidebar.text_input("Gemini API Key", type="password")
+api_key = st.secrets.get("GEMINI_API_KEY")
 
-if gemini_key:
-    genai.configure(api_key=gemini_key)
+if api_key:
+    genai.configure(api_key=api_key)
     model = genai.GenerativeModel('gemini-1.5-flash')
     
-    if st.button("Compile Final Dossier"):
-        with st.spinner("Finalizing report..."):
-            # It pulls the context from what the other agents said
-            context = st.session_state.get('mission_brief', 'No mission started.')
-            response = model.generate_content(f"Create a professional, formatted report based on this brief: {context}")
+    context = st.text_area("Data to compile into report:")
+    
+    if st.button("Generate Final Dossier"):
+        with st.spinner("Writing report..."):
+            response = model.generate_content(f"Create a professional project report from this: {context}")
             st.markdown(response.text)
-            st.download_button("Download Report", response.text, file_name="dossier.md")
+            st.download_button("Download Report", response.text, file_name="report.md")
+else:
+    st.error("Missing GEMINI_API_KEY in Streamlit Secrets.")
