@@ -2,7 +2,11 @@ import streamlit as st
 import google.generativeai as genai
 
 st.title("🎨 Content & Reporting")
-st.markdown("---")
+
+# Pull results from ALL other agents
+intel = st.session_state.get('intel_res', 'No Intel gathered.')
+tech = st.session_state.get('tech_res', 'No Technical data gathered.')
+research = st.session_state.get('res_res', 'No Research data gathered.')
 
 api_key = st.secrets.get("GEMINI_API_KEY")
 
@@ -10,12 +14,21 @@ if api_key:
     genai.configure(api_key=api_key)
     model = genai.GenerativeModel('gemini-1.5-flash')
     
-    context = st.text_area("Data to compile into report:")
-    
-    if st.button("Generate Final Dossier"):
-        with st.spinner("Writing report..."):
-            response = model.generate_content(f"Create a professional project report from this: {context}")
+    if st.button("Finalize Master Dossier"):
+        with st.spinner("Synthesizing Council Intelligence..."):
+            # The "Super Prompt" combining all department outputs
+            combined_input = f"""
+            INTEL REPORT: {intel}
+            TECHNICAL ARCHITECTURE: {tech}
+            RESEARCH VERIFICATION: {research}
+            """
+            
+            response = model.generate_content(
+                f"Act as the Chief Editor. Create a professional, structured final report based on these three department briefings: {combined_input}"
+            )
+            
+            st.markdown("### 🖋️ Final Executive Dossier")
             st.markdown(response.text)
-            st.download_button("Download Report", response.text, file_name="report.md")
+            st.download_button("Download Full Report (.md)", response.text, file_name="Council_Final_Report.md")
 else:
-    st.error("Missing GEMINI_API_KEY in Streamlit Secrets.")
+    st.warning("Content Agent offline. Check Gemini API Key.")
