@@ -1,3 +1,5 @@
 streamlit
 groq
-google-generativeai
+fpdf2
+python-pptx
+requests
