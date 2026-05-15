@@ -4,22 +4,24 @@ from groq import Groq
 st.title("🕵️ Intelligence Department")
 st.markdown("---")
 
-# 1. Access the API Key from the Sidebar
-groq_key = st.sidebar.text_input("Groq API Key (Intel)", type="password")
+api_key = st.secrets.get("GROQ_API_KEY")
 
-if groq_key:
-    client = Groq(api_key=groq_key)
-    
-    # 2. Input for the "Target"
-    target = st.text_input("Enter Target/Topic for Analysis:", 
-                          placeholder="e.g., Competitor analysis for low-cost PCB assembly in India")
+if api_key:
+    client = Groq(api_key=api_key)
+    target = st.text_input("Target for Analysis:")
 
-    # 3. Intelligence Parameters
-    depth = st.select_slider("Analysis Depth", options=["Surface", "Standard", "Deep Dive"])
-    
-    if st.button("Generate Intelligence Dossier"):
-        with st.spinner("Scout Agent is performing reconnaissance..."):
-            
+    if st.button("Generate Intel"):
+        with st.spinner("Agent Scout is active..."):
+            completion = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[
+                    {"role": "system", "content": "You are an OSINT expert. Provide vulnerabilities, market risks, and Google Dorking queries."},
+                    {"role": "user", "content": target}
+                ]
+            )
+            st.info(completion.choices[0].message.content)
+else:
+    st.error("Missing GROQ_API_KEY in Streamlit Secrets.")
             # The System Prompt is what makes the "Intel" agent unique
             system_message = f"""
             You are the Intelligence Director. You specialize in OSINT, competitive strategy, and risk analysis.
