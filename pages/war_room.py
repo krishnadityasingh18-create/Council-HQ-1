@@ -2,6 +2,7 @@ import streamlit as st
 from groq import Groq
 import requests
 import google.generativeai as genai
+import time
 
 st.set_page_config(page_title="Council HQ", page_icon="🛡️", layout="wide")
 
@@ -13,14 +14,18 @@ groq_key = st.secrets.get("GROQ_API_KEY")
 gemini_key = st.secrets.get("GEMINI_API_KEY")
 deepseek_key = st.secrets.get("DEEPSEEK_API_KEY")
 
-mission = st.text_area("Global Mission Objective:", placeholder="Enter your goal...", height=100)
+mission = st.text_area("Global Mission Objective:", 
+                       placeholder="e.g., Design a 6-layer Smart Weather Station...", 
+                       height=100)
 
+# --- PHASE 1: THE DEPLOYMENT ---
 if st.button("🚀 Deploy Full Council"):
     if not groq_key:
         st.error("❌ Missing GROQ_API_KEY")
     else:
         client = Groq(api_key=groq_key)
         with st.status("Council Deployment in Progress...", expanded=True) as status:
+            
             # --- CHAIRMAN ---
             st.write("🏛️ Chairman: Drafting Strategic Brief...")
             try:
@@ -71,26 +76,40 @@ if st.button("🚀 Deploy Full Council"):
 
             status.update(label="✅ All Departments Finished!", state="complete", expanded=False)
 
-# --- THE FINAL ASSEMBLY ---
+# --- PHASE 2: THE FINAL SYNTHESIS (Quota-Resilient) ---
 st.markdown("---")
 if 'intel_res' in st.session_state:
     if st.button("🖋️ Generate Master Dossier"):
         if not gemini_key:
             st.error("❌ Missing GEMINI_API_KEY")
         else:
-            with st.spinner("Gemini 2.0 is assembling the final report..."):
-                try:
-                    genai.configure(api_key=gemini_key)
-                    
-                    # UPDATED MODEL NAME FROM YOUR LIST
-                    model = genai.GenerativeModel('gemini-2.0-flash')
-                    
-                    ctx = f"Intel: {st.session_state.get('intel_res')}\nTech: {st.session_state.get('tech_res')}\nRes: {st.session_state.get('res_res')}"
-                    final = model.generate_content(f"Create a professional project report: {ctx}")
-                    
-                    st.session_state['final_report'] = final.text
+            with st.spinner("Assembling final report (Managing Quotas)..."):
+                genai.configure(api_key=gemini_key)
+                
+                # List of models to try in order of preference to bypass 429 errors
+                model_fallbacks = ['gemini-1.5-flash-latest', 'gemini-pro-latest', 'gemini-1.5-pro-latest']
+                success = False
+                
+                ctx = f"Intel: {st.session_state.get('intel_res')}\nTech: {st.session_state.get('tech_res')}\nRes: {st.session_state.get('res_res')}"
+                prompt = f"Synthesize this into a professional executive report: {ctx}"
+
+                for model_name in model_fallbacks:
+                    if success: break
+                    try:
+                        model = genai.GenerativeModel(model_name)
+                        final = model.generate_content(prompt)
+                        st.session_state['final_report'] = final.text
+                        success = True
+                    except Exception as e:
+                        if "429" in str(e):
+                            st.warning(f"Quota hit for {model_name}. Trying next fallback...")
+                            time.sleep(2) # Short pause to reset connection
+                        else:
+                            st.error(f"Error with {model_name}: {e}")
+                
+                if success:
                     st.markdown("## 🖋️ Master Executive Dossier")
                     st.markdown(st.session_state['final_report'])
-                    st.download_button("Download Report", st.session_state['final_report'], file_name="Report.md")
-                except Exception as e:
-                    st.error(f"Synthesis failed: {e}")
+                    st.download_button("Download Report", st.session_state['final_report'], file_name="Council_Report.md")
+                else:
+                    st.error("All Gemini models reached their rate limit. Please wait 60 seconds and try again.")
