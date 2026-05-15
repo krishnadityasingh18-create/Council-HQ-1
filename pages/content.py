@@ -14,20 +14,24 @@ st.markdown("### Rendering Engine: Markdown to Production Files")
 final_report = st.session_state.get('final_report', None)
 fal_key = st.secrets.get("FAL_KEY", None)
 
-# --- ADVANCED PDF RENDERING ENGINE (CRASH-PROOF) ---
+# --- ADVANCED PDF RENDERING ENGINE (CRASH-PROOF & FORMATTED) ---
 def build_parsed_pdf(markdown_text):
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Helvetica", size=11)
     
+    # Calculate exact safe printable width
+    safe_width = pdf.w - 2 * pdf.l_margin
+    
     # Safe encoding conversion to prevent hidden formatting characters from crashing FPDF
+    # We replace unknown characters with ? to ensure it stays in Latin-1 range
     safe_text = markdown_text.encode('utf-8', 'replace').decode('latin-1')
     lines = safe_text.split('\n')
     
     for line in lines:
         cleaned_line = line.strip()
         if not cleaned_line:
-            pdf.ln(4)  # Empty line spacing
+            pdf.ln(4)
             continue
             
         # Parse Headings (e.g., # Title, ## Section)
@@ -37,26 +41,29 @@ def build_parsed_pdf(markdown_text):
             
             if heading_level == 1:
                 pdf.set_font("Helvetica", style="B", size=18)
-                pdf.cell(0, 12, txt=text_content, ln=True)
+                pdf.multi_cell(safe_width, 10, txt=text_content)
+                pdf.ln(2)
             elif heading_level == 2:
                 pdf.set_font("Helvetica", style="B", size=14)
-                pdf.cell(0, 10, txt=text_content, ln=True)
+                pdf.multi_cell(safe_width, 8, txt=text_content)
+                pdf.ln(2)
             else:
                 pdf.set_font("Helvetica", style="B", size=12)
-                pdf.cell(0, 8, txt=text_content, ln=True)
-            pdf.set_font("Helvetica", style="", size=11)  # Reset to normal text styling
+                pdf.multi_cell(safe_width, 6, txt=text_content)
+                pdf.ln(2)
+            pdf.set_font("Helvetica", style="", size=11)
             
-        # Parse Bullet Points Safely (Replaced Unicode bullet with ASCII hyphen)
+        # Parse Bullet Points Safely (Using ASCII hyphen)
         elif cleaned_line.startswith('* ') or cleaned_line.startswith('- '):
-            text_content = cleaned_line[2:].replace('**', '')  # Clean bold markers inside bullets
+            text_content = cleaned_line[2:].replace('**', '').strip()
             pdf.set_font("Helvetica", size=11)
-            pdf.multi_cell(0, 7, txt=f"  - {text_content}")
+            pdf.multi_cell(safe_width, 7, txt=f"- {text_content}")
             
         # Normal Body Paragraphs
         else:
-            text_content = cleaned_line.replace('**', '')  # Clean normal bold markdown markers
+            text_content = cleaned_line.replace('**', '').strip()
             pdf.set_font("Helvetica", size=11)
-            pdf.multi_cell(0, 7, txt=text_content)
+            pdf.multi_cell(safe_width, 7, txt=text_content)
             
     return pdf.output(dest='S').encode('latin-1')
 
@@ -79,18 +86,19 @@ def build_parsed_pptx(markdown_text):
         if not cleaned:
             continue
             
-        # Every Markdown Heading 2 (##) triggers a brand new slide automatically
+        # Every Markdown Heading 2 (##) triggers a brand new slide
         if cleaned.startswith('## '):
             title_text = cleaned.lstrip('# ').strip()
-            current_slide = prs.slides.add_slide(prs.slide_layouts[1])  # Title + Content layout
+            current_slide = prs.slides.add_slide(prs.slide_layouts[1])
             current_slide.shapes.title.text = title_text
             content_placeholder = current_slide.placeholders[1]
             tf = content_placeholder.text_frame
-            tf.clear()  # Clear placeholder bullet templates
+            tf.clear()
             
-        # Append bullet points or body text to the active slide
+        # Append bullet points or body blocks to the active slide
         elif current_slide and (cleaned.startswith('* ') or cleaned.startswith('- ') or len(cleaned) > 5):
             p = tf.add_paragraph()
+            # Clean formatting markers
             p.text = cleaned.replace('**', '').replace('* ', '').replace('- ', '').strip()
             p.level = 0 if not cleaned.startswith(('*', '-')) else 1
             p.font.size = Pt(14)
@@ -124,17 +132,16 @@ def generate_visual_asset(prompt, api_key):
 if final_report:
     st.success("🎉 Operational report data successfully loaded into memory!")
     
-    # Document Export Button Row
     col1, col2 = st.columns(2)
     with col1:
         if st.button("🛠️ Compile Clean PDF"):
-            with st.spinner("Parsing text formatting to PDF bytes..."):
+            with st.spinner("Compiling PDF..."):
                 try:
                     pdf_bytes = build_parsed_pdf(final_report)
                     st.download_button(
-                        label="📥 Save Native PDF Document",
+                        label="📥 Save PDF Document",
                         data=pdf_bytes,
-                        file_name="Production_Report.pdf",
+                        file_name="Council_Report.pdf",
                         mime="application/pdf"
                     )
                 except Exception as e:
@@ -142,50 +149,47 @@ if final_report:
                     
     with col2:
         if st.button("🛠️ Compile Dynamic PowerPoint"):
-            with st.spinner("Building slide hierarchy..."):
+            with st.spinner("Building slides..."):
                 try:
                     pptx_bytes = build_parsed_pptx(final_report)
                     st.download_button(
-                        label="📥 Save Presentation Deck",
+                        label="📥 Save PPTX Deck",
                         data=pptx_bytes,
                         file_name="Executive_Presentation.pptx",
                         mime="application/vnd.openxmlformats-officedocument.presentationml.presentation"
                     )
                 except Exception as e:
-                    st.error(f"PPTX presentation assembly error: {e}")
+                    st.error(f"PPTX assembly error: {e}")
 
-    # Media Asset Block
     st.markdown("---")
     st.subheader("🖼️ Alternative Visual Media Director")
-    visual_prompt = st.text_input("Describe the schematic, chart concept, or visual render you want to generate (.jpg):",
+    visual_prompt = st.text_input("Describe the schematic or visual render you want (.jpg):",
                                   placeholder="e.g., A minimalist blueprint schematic of a custom electronic microcontroller layout")
     
     if st.button("🎨 Render Visual Asset"):
         if not fal_key:
-            st.error("Missing `FAL_KEY` in your Streamlit secrets configurations.")
+            st.error("Missing FAL_KEY in Streamlit secrets.")
         elif not visual_prompt:
-            st.warning("Please provide a visual text prompt first.")
+            st.warning("Please provide a prompt.")
         else:
-            with st.spinner("Generating ultra-fast graphics matrix via Flux..."):
+            with st.spinner("Rendering graphics via Fal.ai..."):
                 img_url = generate_visual_asset(visual_prompt, fal_key)
                 if img_url:
-                    st.image(img_url, use_container_width=True, caption="Compiled Graphical Asset")
+                    st.image(img_url, use_container_width=True, caption="Generated Asset")
                     try:
                         img_bytes = requests.get(img_url).content
                         st.download_button(
-                            label="💾 Download Asset as .JPG", 
+                            label="💾 Download .JPG", 
                             data=img_bytes, 
-                            file_name="project_render.jpg", 
+                            file_name="render.jpg", 
                             mime="image/jpeg"
                         )
                     except Exception as e:
-                        st.error(f"Could not convert asset download link to raw bytes: {e}")
+                        st.error(f"Download failed: {e}")
 
-    # Raw String Markdown Preview Workspace Area
     st.markdown("---")
     st.subheader("📝 Live Workspace View")
     st.markdown(final_report)
     
 else:
-    st.warning("⚠️ No compiled report data found in running memory stack.")
-    st.info("Please complete the task generation cycle inside the 🛡️ War Room to load data into memory first.")
+    st.warning("⚠️ No data in memory. Run the War Room first.")
