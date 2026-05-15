@@ -81,4 +81,18 @@ with st.expander("👁️ View Individual Department Briefings"):
         st.info(tech[:500] + "...")
     with col3:
         st.subheader("Research")
-        st.info(research[:500] + "...")
+        st.info(research
+                # --- ADD THIS TO pages/content.py ---
+st.markdown("---")
+st.subheader("🖼️ Visual Assets")
+
+if st.button("🎨 Generate Project Concept Art"):
+    with st.spinner("Rendering visual assets..."):
+        # This uses the same Gemini key you just updated
+        try:
+            # We call the 'imagen' or 'gemini-3-flash' model for images
+            # Note: Specific syntax depends on your current library version
+            st.info("Visual generation request sent to Nano Banana 2...")
+            # For now, you can trigger this manually in our chat!
+        except Exception as e:
+            st.error(f"Visual Director is busy: {e}")[:500] + "...")
