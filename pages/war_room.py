@@ -62,20 +62,45 @@ if st.button("🚀 Deploy Full Council"):
             except:
                 st.session_state['res_res'] = "Research data unavailable."
 
-            # --- TECH ---
+# --- TECH DIRECTOR (WITH AUTO-FAILOVER) ---
             st.write("🛠️ Technical Director: Building Architecture...")
+            tech_success = False
+            
+            # Attempt 1: DeepSeek
             if deepseek_key:
                 try:
-                    p = {"model": "deepseek-chat", "messages": [{"role": "user", "content": f"Execute [TECH]: {mission}"}]}
-                    r = requests.post("https://api.deepseek.com/chat/completions", 
-                                     json=p, headers={"Authorization": f"Bearer {deepseek_key}"}, timeout=15)
-                    st.session_state['tech_res'] = r.json().get('choices', [{}])[0].get('message', {}).get('content', 'Tech Offline')
+                    p = {
+                        "model": "deepseek-chat", 
+                        "messages": [{"role": "system", "content": "You are a Senior Electronics Engineer. Design the technical architecture requested."},
+                                     {"role": "user", "content": f"Execute [TECH]: {mission}"}]
+                    }
+                    r = requests.post(
+                        "https://api.deepseek.com/chat/completions", 
+                        json=p, 
+                        headers={"Authorization": f"Bearer {deepseek_key}"}, 
+                        timeout=10 # Short timeout to trigger failover quickly
+                    )
+                    if r.status_code == 200:
+                        st.session_state['tech_res'] = r.json().get('choices', [{}])[0].get('message', {}).get('content', 'Tech Offline')
+                        tech_success = True
+                    else:
+                        st.warning("DeepSeek busy... switching to Llama-3 Backup.")
                 except:
-                    st.session_state['tech_res'] = "Technical Agent Timeout."
-            else:
-                st.session_state['tech_res'] = "DeepSeek Key not found."
+                    pass # Move to failover
 
-            status.update(label="✅ All Departments Finished!", state="complete", expanded=False)
+            # Attempt 2: Failover to Groq/Llama (The Bulletproof Path)
+            if not tech_success:
+                try:
+                    res_t = client.chat.completions.create(
+                        model="llama-3.3-70b-versatile",
+                        messages=[{"role": "system", "content": "Lead Technical Architect: Design the hardware and code architecture for this mission."},
+                                  {"role": "user", "content": f"Execute [TECH]: {mission}"}]
+                    )
+                    st.session_state['tech_res'] = res_t.choices[0].message.content
+                    tech_success = True
+                    st.write("🛠️ Technical Director: (via Llama-3 Backup) ✅")
+                except Exception as e:
+                    st.session_state['tech_res'] = f"Technical Agent critical failure: {e}"
 
 # --- PHASE 2: THE FINAL ASSEMBLY (GROQ-POWERED) ---
 st.markdown("---")
