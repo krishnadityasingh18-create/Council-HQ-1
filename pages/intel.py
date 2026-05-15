@@ -2,28 +2,22 @@ import streamlit as st
 from groq import Groq
 
 st.title("🕵️ Intelligence Department")
-st.markdown("---")
+mission = st.session_state.get('global_mission')
 
-api_key = st.secrets.get("GROQ_API_KEY")
-
-if api_key:
-    client = Groq(api_key=api_key)
-    target = st.text_input("Target for Analysis:")
-
-    if st.button("Generate Intel"):
-        with st.spinner("Agent Scout is active..."):
-            # Ensure the line below has NO extra spaces before 'system_message'
-            system_message = f"""
-            You are an OSINT expert. Provide vulnerabilities, market risks, and Google Dorking queries.
-            """
-            
-            completion = client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
-                messages=[
-                    {"role": "system", "content": system_message},
-                    {"role": "user", "content": target}
-                ]
-            )
-            st.info(completion.choices[0].message.content)
+if not mission:
+    st.warning("Awaiting mission from War Room...")
 else:
-    st.error("Missing GROQ_API_KEY in Streamlit Secrets.")
+    api_key = st.secrets.get("GROQ_API_KEY")
+    client = Groq(api_key=api_key)
+
+    # AUTO-EXECUTION LOGIC
+    if 'intel_res' not in st.session_state:
+        with st.spinner("Scout Agent processing mission..."):
+            res = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[{"role": "system", "content": "You are the Intel Director. Execute the [INTEL] portion of this mission."},
+                          {"role": "user", "content": mission}]
+            )
+            st.session_state['intel_res'] = res.choices[0].message.content
+
+    st.info(st.session_state['intel_res'])
