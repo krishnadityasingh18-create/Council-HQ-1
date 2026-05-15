@@ -1,98 +1,135 @@
 import streamlit as st
-import google.generativeai as genai
+import requests
+from fpdf import FPDF
+from pptx import Presentation
+from io import BytesIO
 
-st.set_page_config(page_title="Content & Reporting", page_icon="🎨", layout="wide")
+st.set_page_config(page_title="Output Factory", page_icon="📦", layout="wide")
 
-st.title("🎨 Content & Reporting")
-st.markdown("### Executive Dossier Finalization")
+st.title("📦 Output & Asset Factory")
+st.markdown("### Convert Raw Intel into Production Files")
 
-# 1. Pull data from the Council's session state
-intel = st.session_state.get('intel_res', 'No Intelligence data found.')
-tech = st.session_state.get('tech_res', 'No Technical data found.')
-research = st.session_state.get('res_res', 'No Research data found.')
+# Pull raw text from session state
 final_report = st.session_state.get('final_report', None)
+fal_key = st.secrets.get("FAL_KEY", None)
 
-# 2. Check for API Key
-api_key = st.secrets.get("GEMINI_API_KEY")
+# --- ENGINE 1: SAFE PDF GENERATION ---
+def build_pdf(text):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Helvetica", size=11)
+    
+    # Strictly handle Python 3.14 string encoding safety
+    safe_text = text.encode('utf-8', 'replace').decode('latin-1')
+    
+    # Process line by line to keep formatting neat
+    for line in safe_text.split('\n'):
+        pdf.multi_cell(0, 8, txt=line)
+    
+    # Stream directly out of memory
+    return pdf.output(dest='S').encode('latin-1')
 
-if not api_key:
-    st.error("❌ GEMINI_API_KEY is missing from Streamlit Secrets.")
-else:
-    # Sidebar status indicators
-    with st.sidebar:
-        st.header("Council Status")
-        st.write(f"🕵️ Intel: {'✅' if 'intel_res' in st.session_state else '❌'}")
-        st.write(f"🛠️ Tech: {'✅' if 'tech_res' in st.session_state else '❌'}")
-        st.write(f"🔬 Research: {'✅' if 'res_res' in st.session_state else '❌'}")
+# --- ENGINE 2: PPTX PRESENTATION GENERATION ---
+def build_pptx(text):
+    prs = Presentation()
+    
+    # Title Slide
+    slide_1 = prs.slides.add_slide(prs.slide_layouts[0])
+    slide_1.shapes.title.text = "Project Master Dossier"
+    slide_1.placeholders[1].text = "Compiled autonomously by Council HQ"
+    
+    # Brief Content Slide
+    slide_2 = prs.slides.add_slide(prs.slide_layouts[1])
+    slide_2.shapes.title.text = "Executive Summary"
+    
+    # Break text up safely so it doesn't overflow slide bounds
+    clean_lines = [line.strip() for line in text.split('\n') if line.strip()]
+    summary_chunks = "\n".join(clean_lines[:10])
+    slide_2.placeholders[1].text = summary_chunks if summary_chunks else "See attached PDF for full technical report."
+    
+    stream = BytesIO()
+    prs.save(stream)
+    return stream.getvalue()
 
-    # Display results if they exist
-    if final_report:
-        st.success("✅ Master Dossier is ready for review.")
-        st.markdown("---")
-        st.markdown(final_report)
-        
-        st.download_button(
-            label="📥 Download Master Report (.md)",
-            data=final_report,
-            file_name="Council_Final_Report.md",
-            mime="text/markdown"
-        )
-    else:
-        st.warning("The Master Dossier hasn't been generated yet. You can trigger it below.")
-        
-        if st.button("🖋️ Manual Synthesis"):
-            with st.spinner("The Chief Editor is synthesizing department briefings..."):
-                try:
-                    genai.configure(api_key=api_key)
-                    # Using the model confirmed by your ListModels call
-                    model = genai.GenerativeModel('gemini-2.0-flash')
-                    
-                    combined_input = f"""
-                    DEPT 1 (INTEL): {intel}
-                    DEPT 2 (TECH): {tech}
-                    DEPT 3 (RESEARCH): {research}
-                    """
-                    
-                    # Debugging fix: Added a high timeout to prevent the gRPC error
-                    response = model.generate_content(
-                        f"Act as the Chief Editor. Synthesize these department briefings into a professional, structured executive dossier: {combined_input}",
-                        request_options={"timeout": 600}
-                    )
-                    
-                    st.session_state['final_report'] = response.text
-                    st.rerun() # Refresh to show the report
-                    
-                except Exception as e:
-                    if "429" in str(e):
-                        st.error("Quota Exceeded. Please wait 60 seconds.")
-                    elif "Deadline Exceeded" in str(e):
-                        st.error("The synthesis took too long. Try again in a moment.")
-                    else:
-                        st.error(f"Synthesis failed: {e}")
+# --- ENGINE 3: VISUAL AI GENERATOR (FAL.AI / FLUX) ---
+def generate_visual_asset(prompt, api_key):
+    headers = {
+        "Authorization": f"Key {api_key}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "prompt": prompt,
+        "image_size": "16:9",
+        "sync_mode": True
+    }
+    # Using the lightning-fast, highly accurate Flux Schnell model
+    url = "https://queue.fal.run/fal-ai/flux/schnell"
+    response = requests.post(url, json=payload, headers=headers, timeout=20)
+    
+    if response.status_code == 200:
+        return response.json().get("images", [{}])[0].get("url", None)
+    return None
 
-# 3. Quick Reference Sections (Optional but helpful)
-with st.expander("👁️ View Individual Department Briefings"):
-    col1, col2, col3 = st.columns(3)
+
+# --- USER INTERFACE RUNTIME ---
+
+if final_report:
+    st.success("✅ Technical data is loaded into memory.")
+    
+    # 🗂️ SECTION 1: DOCUMENT EXPORTS
+    st.subheader("📄 Document & Presentation Generation")
+    col1, col2 = st.columns(2)
+    
     with col1:
-        st.subheader("Intelligence")
-        st.info(intel[:500] + "...")
+        pdf_bytes = build_pdf(final_report)
+        st.download_button(
+            label="📥 Download Formal PDF",
+            data=pdf_bytes,
+            file_name="Council_Dossier.pdf",
+            mime="application/pdf"
+        )
+        
     with col2:
-        st.subheader("Technical")
-        st.info(tech[:500] + "...")
-    with col3:
-        st.subheader("Research")
-        st.info(research
-                # --- ADD THIS TO pages/content.py ---
-st.markdown("---")
-st.subheader("🖼️ Visual Assets")
+        pptx_bytes = build_pptx(final_report)
+        st.download_button(
+            label="📥 Download PowerPoint Deck",
+            data=pptx_bytes,
+            file_name="Council_Presentation.pptx",
+            mime="application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        )
 
-if st.button("🎨 Generate Project Concept Art"):
-    with st.spinner("Rendering visual assets..."):
-        # This uses the same Gemini key you just updated
-        try:
-            # We call the 'imagen' or 'gemini-3-flash' model for images
-            # Note: Specific syntax depends on your current library version
-            st.info("Visual generation request sent to Nano Banana 2...")
-            # For now, you can trigger this manually in our chat!
-        except Exception as e:
-            st.error(f"Visual Director is busy: {e}")[:500] + "...")
+    st.markdown("---")
+    
+    # 🎨 SECTION 2: VISUAL GENERATION
+    st.subheader("🖼️ Alternative Visual Director")
+    visual_prompt = st.text_input("Describe the schematic or visual render you need:", 
+                                  placeholder="e.g., A 4-layer ESP32 PCB blueprint, minimalist tech schematic style")
+    
+    if st.button("🎨 Render Visual Asset"):
+        if not fal_key:
+            st.error("Missing `FAL_KEY` in Streamlit Secrets.")
+        elif not visual_prompt:
+            st.warning("Please describe what you want to visualize first.")
+        else:
+            with st.spinner("Generating image via Fal.ai..."):
+                img_url = generate_visual_asset(visual_prompt, fal_key)
+                if img_url:
+                    st.image(img_url, caption="Generated Project Asset", use_container_width=True)
+                    
+                    # Provide an immediate download link for the JPG
+                    img_data = requests.get(img_url).content
+                    st.download_button(
+                        label="💾 Save Asset as .JPG",
+                        data=img_data,
+                        file_name="Project_Render.jpg",
+                        mime="image/jpeg"
+                    )
+                else:
+                    st.error("Visual API failed to render image. Check your key or prompt.")
+
+    st.markdown("---")
+    st.subheader("📝 Live Text Preview")
+    st.markdown(final_report)
+
+else:
+    st.warning("⚠️ No data compiled yet. Run your workspace in the War Room first.")
