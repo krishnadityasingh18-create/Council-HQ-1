@@ -53,41 +53,53 @@ if st.button("🚀 Deploy Full Council"):
 
         status.update(label="✅ Agents Finished!", state="complete")
 
-# --- THE FINAL ASSEMBLY (UNIVERSAL LOADER) ---
-if st.button("🖋️ Generate Master Dossier"):
-    if not st.secrets.get("GEMINI_API_KEY"):
-        st.error("API Key missing!")
-    else:
-        with st.spinner("Council is assembling the final report..."):
-            try:
-                # Force the library to use the stable configuration
-                genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-                
-                # TEST 1: Try the most stable name first
-                # We skip 'models/' prefix because the library adds it
-                model = genai.GenerativeModel('gemini-1.5-flash')
-                
-                # Prepare the data
-                ctx = f"INTEL: {st.session_state.get('intel_res')}\nTECH: {st.session_state.get('tech_res')}\nRES: {st.session_state.get('res_res')}"
-                
-                # Execute with a direct prompt
-                response = model.generate_content(
-                    f"Combine these reports into one professional engineering dossier: {ctx}",
-                    request_options={"timeout": 600}
-                )
-                
-                st.session_state['final_report'] = response.text
-                st.success("✅ Success!")
-                st.markdown(st.session_state['final_report'])
-                
-            except Exception as e:
-                # IF TEST 1 FAILS: Try the "Latest" tag which bypasses versioning
+# --- THE FINAL ASSEMBLY (GROQ-POWERED) ---
+st.markdown("---")
+if 'intel_res' in st.session_state:
+    if st.button("🖋️ Generate Master Dossier"):
+        with st.spinner("Llama 3.3 is synthesizing the final report..."):
+            if not groq_key:
+                st.error("❌ Missing GROQ_API_KEY")
+            else:
                 try:
-                    st.info("Retrying with legacy-stable path...")
-                    model = genai.GenerativeModel('gemini-pro')
-                    response = model.generate_content(f"Summarize this: {ctx}")
-                    st.session_state['final_report'] = response.text
-                    st.rerun()
-                except Exception as e2:
-                    st.error(f"Critical Failure: {e2}")
-                    st.info("Check: Is your API key from 'Google AI Studio' and not 'Google Cloud Vertex AI'?")
+                    # We reuse the client defined earlier in the script
+                    client = Groq(api_key=groq_key)
+                    
+                    # Prepare the context
+                    ctx = f"""
+                    MISSION BRIEF: {st.session_state.get('global_mission', 'N/A')}
+                    
+                    ---
+                    [DEPARTMENT 1: INTELLIGENCE]
+                    {st.session_state.get('intel_res', 'No data')}
+                    
+                    ---
+                    [DEPARTMENT 2: TECHNICAL ARCHITECTURE]
+                    {st.session_state.get('tech_res', 'No data')}
+                    
+                    ---
+                    [DEPARTMENT 3: RESEARCH & STANDARDS]
+                    {st.session_state.get('res_res', 'No data')}
+                    """
+                    
+                    # Synthesis Call
+                    response = client.chat.completions.create(
+                        model="llama-3.3-70b-versatile",
+                        messages=[
+                            {"role": "system", "content": "You are the Chief of Staff. Synthesize the provided department reports into a professional, cohesive executive dossier. Use clean Markdown, clear headings, and ensure all technical specs are preserved."},
+                            {"role": "user", "content": ctx}
+                        ]
+                    )
+                    
+                    st.session_state['final_report'] = response.choices[0].message.content
+                    st.success("✅ Dossier Compiled via Llama-3-70B!")
+                    st.markdown(st.session_state['final_report'])
+                    
+                    st.download_button(
+                        label="📥 Download Master Report (.md)",
+                        data=st.session_state['final_report'],
+                        file_name="Council_Final_Report.md",
+                        mime="text/markdown"
+                    )
+                except Exception as e:
+                    st.error(f"Groq Synthesis failed: {e}") AI Studio' and not 'Google Cloud Vertex AI'?")
