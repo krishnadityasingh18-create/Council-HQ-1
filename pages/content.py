@@ -24,7 +24,6 @@ def build_parsed_pdf(markdown_text):
     safe_width = pdf.w - 2 * pdf.l_margin
     
     # Safe encoding conversion to prevent hidden formatting characters from crashing FPDF
-    # We replace unknown characters with ? to ensure it stays in Latin-1 range
     safe_text = markdown_text.encode('utf-8', 'replace').decode('latin-1')
     lines = safe_text.split('\n')
     
@@ -65,7 +64,8 @@ def build_parsed_pdf(markdown_text):
             pdf.set_font("Helvetica", size=11)
             pdf.multi_cell(safe_width, 7, txt=text_content)
             
-    return pdf.output(dest='S').encode('latin-1')
+    # FIXED: pdf.output(dest='S') already returns bytes/bytearray. No .encode() needed!
+    return pdf.output(dest='S')
 
 # --- ADVANCED PPTX RENDERING ENGINE (AUTO-SLIDE GENERATOR) ---
 def build_parsed_pptx(markdown_text):
@@ -98,7 +98,6 @@ def build_parsed_pptx(markdown_text):
         # Append bullet points or body blocks to the active slide
         elif current_slide and (cleaned.startswith('* ') or cleaned.startswith('- ') or len(cleaned) > 5):
             p = tf.add_paragraph()
-            # Clean formatting markers
             p.text = cleaned.replace('**', '').replace('* ', '').replace('- ', '').strip()
             p.level = 0 if not cleaned.startswith(('*', '-')) else 1
             p.font.size = Pt(14)
